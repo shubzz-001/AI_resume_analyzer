@@ -1,0 +1,19 @@
+python
+java
+c++
+sql
+mysql
+postgresql
+machine learning
+deep learning
+nlp
+data analysis
+pandas
+numpy
+scikit-learn
+tensorflow
+docker
+git
+spring boot
+fastapi
+aws
