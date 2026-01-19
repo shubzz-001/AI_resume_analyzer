@@ -4,6 +4,8 @@ from resume_parser.parser import extract_text
 from nlp.cleaner import clean_text
 from nlp.skill_extractor import load_skills, extract_skills
 from ml.predictor import predict_job_role
+from recommnder.job_matcher import recommend_jobs
+from utils.scoring import calculate_resume_score
 
 # Page config
 st.set_page_config(page_title="AI Resume Analyzer", layout="wide")
@@ -42,6 +44,23 @@ if uploaded_file is not None:
 
         st.subheader("🎯 Predicted Job Role")
         st.success(f"{job_role} ({confidence}%)")
+
+        # Step 5: Job Recommendations
+
+        st.subheader("💼 Job Recommendation")
+
+        recommendations = recommend_jobs(cleaned_text)
+
+        st.dataframe(
+            recommendations[["job_title", "match_score"]]
+            .rename(columns={"job_title": "Job Role", "match_score": "Match %"})
+        )
+
+        # Step 6: Resume Scores
+        resume_score = calculate_resume_score(skills, cleaned_text)
+        st.subheader("📊 Resume Score")
+        st.progress(resume_score/100)
+        st.success(f"Resume Score: {resume_score}/100")
 
     else:
         st.error("❌ Could not extract text from resume. Please upload a text-based PDF or DOCX.")
