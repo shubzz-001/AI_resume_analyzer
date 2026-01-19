@@ -1,0 +1,7 @@
+{
+  "Data Analyst": ["sql", "python", "data analysis", "statistics", "power bi", "excel"],
+  "ML Engineer": ["python", "machine learning", "deep learning", "nlp", "tensorflow", "pytorch"],
+  "Backend Developer": ["java", "spring boot", "sql", "rest api", "authentication"],
+  "Software Engineer": ["data structures", "algorithms", "oops", "problem solving"],
+  "DevOps Engineer": ["docker", "kubernetes", "ci/cd", "aws", "linux"]
+}
