@@ -1,4 +1,3 @@
-
 import streamlit as st
 
 from resume_parser.parser import extract_text
@@ -6,8 +5,12 @@ from nlp.cleaner import clean_text
 from nlp.skill_extractor import load_skills, extract_skills
 from ml.predictor import predict_job_role
 from recommender.job_matcher import recommend_jobs
-from recommender.skill_gap import find_skill_gaps
 from utils.scoring import calculate_resume_score
+from utils.ats_score import calculate_ats_score
+from utils.section_checker import check_resume_sections
+from utils.ats_feedback import generate_ats_feedback
+from utils.rewrite_engine import suggest_rewrites
+from utils.improvement_tips import generate_improvement_tips
 
 
 # ================= PAGE CONFIG =================
@@ -17,9 +20,9 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📄 AI Resume Analyzer & Job Recommender")
+st.title("📄 AI Resume Analyzer & Resume ")
 st.caption(
-    "Upload your resume to get job predictions, recommendations, resume score, and skill gap analysis"
+    "ATS-style resume analysis with improvement tips and bullet-point rewrite suggestions"
 )
 st.divider()
 
@@ -48,34 +51,129 @@ if uploaded_file is not None:
         # ---- Skill Extraction ----
         skills = extract_skills(cleaned_text, skills_db)
 
-        # ---- Job Role Prediction ----
-        job_role, confidence = predict_job_role(cleaned_text)
+        # ---- ML Job Role Prediction ----
+        predicted_role, confidence = predict_job_role(cleaned_text)
 
-        # ---- Resume Score ----
+        # ---- Resume Quality Score ----
         resume_score = calculate_resume_score(skills, cleaned_text)
 
         # ---- Job Recommendations ----
         recommendations = recommend_jobs(cleaned_text)
 
-        # ---- Skill Gaps ----
-        skill_gaps = find_skill_gaps(job_role, skills)
-
         # ================= DASHBOARD =================
-
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("🎯 Predicted Job Role")
-            st.success(f"{job_role} ({confidence}%)")
+            st.subheader("🎯 ML Predicted Job Role")
+            st.success(f"{predicted_role} ({confidence}%)")
 
         with col2:
-            st.subheader("📊 Resume Score")
+            st.subheader("📊 Resume Quality Score")
             st.progress(resume_score / 100)
             st.metric("Score", f"{resume_score}/100")
 
         st.divider()
 
-        # ================= SKILLS =================
+        # ================= ATS JOB-SPECIFIC ANALYSIS =================
+        st.subheader("🤖 ATS Job-Specific Analysis")
+
+        target_role = st.selectbox(
+            "Select the job role you are applying for",
+            [
+                "Data Analyst",
+                "ML Engineer",
+                "Backend Developer",
+                "Software Engineer"
+            ],
+            index=0
+        )
+
+        ats_score, coverage, missing_core, missing_optional, keywords = calculate_ats_score(
+            target_role,
+            skills,
+            cleaned_text
+        )
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            st.subheader("📈 ATS Resume Score")
+            st.progress(ats_score / 100)
+            st.metric("ATS Score", f"{ats_score}/100")
+
+        with col4:
+            st.subheader("🔑 Keyword Coverage")
+            st.metric("Coverage", f"{coverage}%")
+
+        st.divider()
+
+        # ================= MISSING ATS SKILLS =================
+        st.subheader("❌ Missing Core Skills (High Priority)")
+        if missing_core:
+            for skill in missing_core:
+                st.error(skill)
+        else:
+            st.success("No core skills missing 🎉")
+
+        st.subheader("⚠️ Missing Optional Skills")
+        if missing_optional:
+            st.write(", ".join(missing_optional))
+        else:
+            st.success("No optional skills missing")
+
+        st.divider()
+
+        # ================= RESUME SECTION CHECK =================
+        missing_sections = check_resume_sections(cleaned_text)
+
+        st.subheader("📄 Resume Section Completeness")
+        if missing_sections:
+            for section in missing_sections:
+                st.warning(f"Missing section: {section.capitalize()}")
+        else:
+            st.success("All important resume sections are present")
+
+        st.divider()
+
+        # ================= ATS FEEDBACK =================
+        feedback = generate_ats_feedback(
+            ats_score,
+            missing_core,
+            missing_optional,
+            missing_sections
+        )
+
+        st.subheader("🧠 ATS Feedback")
+        for msg in feedback:
+            st.info(msg)
+
+        st.divider()
+
+        # ================= RESUME IMPROVEMENT TIPS =================
+        st.subheader("✍️ Resume Improvement Suggestions")
+
+        improvement_tips = generate_improvement_tips(
+            ats_score,
+            missing_core,
+            missing_optional,
+            missing_sections
+        )
+
+        for tip in improvement_tips:
+            st.info(tip)
+
+        st.divider()
+
+        # ================= BULLET POINT REWRITE SUGGESTIONS =================
+        st.subheader("🔁 ATS-Friendly Bullet Point Examples")
+
+        rewrite_suggestions = suggest_rewrites(target_role)
+        for bullet in rewrite_suggestions:
+            st.markdown(f"- {bullet}")
+
+        st.divider()
+
+        # ================= EXTRACTED SKILLS =================
         st.subheader("🛠 Extracted Skills")
         if skills:
             st.markdown(" ".join([f"`{skill}`" for skill in skills]))
@@ -97,17 +195,7 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # ================= SKILL GAPS =================
-        st.subheader("📉 Skill Gaps")
-        if skill_gaps:
-            for skill in skill_gaps:
-                st.warning(f"Missing: {skill}")
-        else:
-            st.success("Great! No major skill gaps found 🎉")
-
-        st.divider()
-
-        # ================= CLEANED TEXT (OPTIONAL VIEW) =================
+        # ================= CLEANED TEXT =================
         with st.expander("📄 View Cleaned Resume Text"):
             st.text_area(
                 "Cleaned Resume Text",

@@ -1,0 +1,28 @@
+{
+  "Data Analyst": {
+    "core": {
+      "sql": 10,
+      "python": 10,
+      "data analysis": 8,
+      "statistics": 7
+    },
+    "optional": {
+      "power bi": 5,
+      "excel": 4,
+      "tableau": 4
+    }
+  },
+  "ML Engineer": {
+    "core": {
+      "python": 10,
+      "machine learning": 10,
+      "deep learning": 8,
+      "nlp": 7
+    },
+    "optional": {
+      "tensorflow": 5,
+      "pytorch": 5,
+      "feature engineering": 6
+    }
+  }
+}
