@@ -1,9 +1,12 @@
 import streamlit as st
 
+# ---------- Core Pipeline ----------
 from resume_parser.parser import extract_text
 from nlp.cleaner import clean_text
 from nlp.skill_extractor import load_skills, extract_skills
 from ml.predictor import predict_job_role
+
+# ---------- Phase 1 ----------
 from recommender.job_matcher import recommend_jobs
 from utils.scoring import calculate_resume_score
 from utils.ats_score import calculate_ats_score
@@ -11,6 +14,10 @@ from utils.section_checker import check_resume_sections
 from utils.ats_feedback import generate_ats_feedback
 from utils.rewrite_engine import suggest_rewrites
 from utils.improvement_tips import generate_improvement_tips
+
+# ---------- Semantic NLP ----------
+from semantic.hybrid_ats import hybrid_ats_score
+from semantic.semantic_job_matcher_v2 import semantic_recommend_jobs_v2
 
 
 # ================= PAGE CONFIG =================
@@ -20,9 +27,9 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📄 AI Resume Analyzer & Resume ")
+st.title("📄 AI Resume Analyzer ")
 st.caption(
-    "ATS-style resume analysis with improvement tips and bullet-point rewrite suggestions"
+    "ATS + Semantic NLP powered resume analysis with job-specific scoring, recommendations"
 )
 st.divider()
 
@@ -45,22 +52,19 @@ if uploaded_file is not None:
     if resume_text and len(resume_text.strip()) > 50:
         st.toast("Resume analyzed successfully!", icon="✅")
 
-        # ---- NLP Cleaning ----
+        # ---------- NLP ----------
         cleaned_text = clean_text(resume_text)
 
-        # ---- Skill Extraction ----
+        # ---------- Skills ----------
         skills = extract_skills(cleaned_text, skills_db)
 
-        # ---- ML Job Role Prediction ----
+        # ---------- ML Prediction ----------
         predicted_role, confidence = predict_job_role(cleaned_text)
 
-        # ---- Resume Quality Score ----
+        # ---------- Resume Quality ----------
         resume_score = calculate_resume_score(skills, cleaned_text)
 
-        # ---- Job Recommendations ----
-        recommendations = recommend_jobs(cleaned_text)
-
-        # ================= DASHBOARD =================
+        # ================= TOP DASHBOARD =================
         col1, col2 = st.columns(2)
 
         with col1:
@@ -74,56 +78,65 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # ================= ATS JOB-SPECIFIC ANALYSIS =================
-        st.subheader("🤖 ATS Job-Specific Analysis")
+        # ================= ATS MODE =================
+        st.subheader("🤖 ATS Analysis Mode")
+
+        ats_mode = st.radio(
+            "Select ATS Evaluation Mode",
+            ["Keyword ATS", "Semantic ATS (AI)", "Hybrid ATS (Recommended)"],
+            horizontal=True
+        )
 
         target_role = st.selectbox(
-            "Select the job role you are applying for",
-            [
-                "Data Analyst",
-                "ML Engineer",
-                "Backend Developer",
-                "Software Engineer"
-            ],
-            index=0
+            "Target Job Role",
+            ["Data Analyst", "ML Engineer", "Backend Developer", "Software Engineer"]
         )
 
-        ats_score, coverage, missing_core, missing_optional, keywords = calculate_ats_score(
-            target_role,
-            skills,
-            cleaned_text
-        )
+        # ---------- ATS LOGIC ----------
+        if ats_mode == "Keyword ATS":
+            ats_score, coverage, missing_core, missing_optional, _ = calculate_ats_score(
+                target_role, skills, cleaned_text
+            )
+            semantic_explain = []
+
+        elif ats_mode == "Semantic ATS (AI)":
+            ats_score, details = hybrid_ats_score(
+                cleaned_text, skills, target_role, keyword_weight=0.0, semantic_weight=1.0
+            )
+            coverage = "Semantic"
+            missing_core = []
+            missing_optional = []
+            semantic_explain = details["semantic_matches"]
+
+        else:  # Hybrid
+            ats_score, details = hybrid_ats_score(
+                cleaned_text, skills, target_role
+            )
+            coverage = "Hybrid"
+            missing_core = []
+            missing_optional = []
+            semantic_explain = details["semantic_matches"]
 
         col3, col4 = st.columns(2)
 
         with col3:
-            st.subheader("📈 ATS Resume Score")
+            st.subheader("📈 ATS Score")
             st.progress(ats_score / 100)
             st.metric("ATS Score", f"{ats_score}/100")
 
         with col4:
-            st.subheader("🔑 Keyword Coverage")
-            st.metric("Coverage", f"{coverage}%")
+            st.subheader("🔍 Evaluation Type")
+            st.info(str(coverage))
 
         st.divider()
 
-        # ================= MISSING ATS SKILLS =================
-        st.subheader("❌ Missing Core Skills (High Priority)")
-        if missing_core:
-            for skill in missing_core:
-                st.error(skill)
-        else:
-            st.success("No core skills missing 🎉")
+        # ================= SEMANTIC EXPLANATIONS =================
+        if semantic_explain:
+            st.subheader("🧠 Semantic Match Explanations")
+            for skill, sim in semantic_explain:
+                st.caption(f"Matched `{skill}` ({sim}%)")
 
-        st.subheader("⚠️ Missing Optional Skills")
-        if missing_optional:
-            st.write(", ".join(missing_optional))
-        else:
-            st.success("No optional skills missing")
-
-        st.divider()
-
-        # ================= RESUME SECTION CHECK =================
+        # ================= SECTION CHECK =================
         missing_sections = check_resume_sections(cleaned_text)
 
         st.subheader("📄 Resume Section Completeness")
@@ -149,7 +162,7 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # ================= RESUME IMPROVEMENT TIPS =================
+        # ================= IMPROVEMENT TIPS =================
         st.subheader("✍️ Resume Improvement Suggestions")
 
         improvement_tips = generate_improvement_tips(
@@ -164,47 +177,37 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # ================= BULLET POINT REWRITE SUGGESTIONS =================
+        # ================= BULLET REWRITES =================
         st.subheader("🔁 ATS-Friendly Bullet Point Examples")
-
-        rewrite_suggestions = suggest_rewrites(target_role)
-        for bullet in rewrite_suggestions:
+        for bullet in suggest_rewrites(target_role):
             st.markdown(f"- {bullet}")
 
         st.divider()
 
-        # ================= EXTRACTED SKILLS =================
+        # ================= SKILLS =================
         st.subheader("🛠 Extracted Skills")
         if skills:
-            st.markdown(" ".join([f"`{skill}`" for skill in skills]))
+            st.markdown(" ".join([f"`{s}`" for s in skills]))
         else:
-            st.warning("No skills detected.")
+            st.warning("No skills detected")
 
         st.divider()
 
         # ================= JOB RECOMMENDATIONS =================
-        st.subheader("💼 Job Recommendations")
-        st.dataframe(
-            recommendations[["job_title", "match_score"]]
-            .rename(columns={
-                "job_title": "Job Role",
-                "match_score": "Match %"
-            }),
-            use_container_width=True
-        )
+        st.subheader("💼 Job Recommendations (Semantic)")
+
+        sem_jobs = semantic_recommend_jobs_v2(cleaned_text)
+
+        if sem_jobs:
+            st.dataframe(sem_jobs, use_container_width=True)
+        else:
+            st.warning("No strong semantic job matches found")
 
         st.divider()
 
-        # ================= CLEANED TEXT =================
+        # ================= RAW TEXT =================
         with st.expander("📄 View Cleaned Resume Text"):
-            st.text_area(
-                "Cleaned Resume Text",
-                cleaned_text,
-                height=250
-            )
+            st.text_area("Cleaned Resume Text", cleaned_text, height=250)
 
     else:
-        st.error(
-            "❌ Could not extract text from resume. "
-            "Please upload a text-based PDF or DOCX."
-        )
+        st.error("❌ Could not extract text from resume. Upload a text-based PDF or DOCX.")
