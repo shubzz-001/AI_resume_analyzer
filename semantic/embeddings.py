@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from semantic.cache import get_cached_embeddings, set_cached_embeddings
 
 _model = None
 
@@ -11,7 +12,18 @@ def get_model() :
 
 def embed(texts) :
     model = get_model()
-    return model.encode(texts, normalize_embeddings=True)
+    embedddings = []
+
+    for text in texts :
+        cached = get_cached_embeddings(text)
+        if cached is not None:
+            embedddings.append(cached)
+        else :
+            vec = model.encode(text, normalize_embeddings=True)
+            set_cached_embeddings(text, vec)
+            embedddings.append(vec)
+
+    return np.array(embedddings)
 
 def cosine_sim(a, b) :
     return float(np.dot(a, b))
