@@ -1,6 +1,6 @@
 import streamlit as st
 
-from resume_parser.parser import extract_text
+from parsers.parser import extract_text
 from nlp.cleaner import clean_text
 from nlp.skill_extractor import load_skills, extract_skills
 from ml.predictor import predict_job_role
